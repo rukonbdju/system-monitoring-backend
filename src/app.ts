@@ -20,6 +20,32 @@ const io = new Server(httpServer, {
     }
 });
 
+app.get('/api/vm-info', async (req, res) => {
+    try {
+        const [osInfo, netInterfaces] = await Promise.all([
+            si.osInfo(),
+            si.networkInterfaces()
+        ]);
+
+        // Find the main non-internal interface
+        const mainInterface = Array.isArray(netInterfaces)
+            ? netInterfaces.find(i => !i.internal && i.ip4)
+            : null;
+        const data = {
+            instanceId: osInfo.hostname,
+            status: 'Online',
+            region: 'Local', // Region is cloud-specific; defaulting to Local
+            ip: mainInterface?.ip4 || '127.0.0.1',
+            os: `${osInfo.distro} ${osInfo.release}`,
+            kernel: osInfo.kernel
+        }
+        res.json({ success: true, data })
+    } catch (error) {
+        console.log(error)
+        res.json({ success: false, message: "Data not found." })
+    }
+})
+
 // --- Interfaces ---
 interface SystemStats {
     cpuUsage: number;
@@ -44,19 +70,6 @@ io.on('connection', async (socket) => {
             si.networkInterfaces()
         ]);
 
-        // Find the main non-internal interface
-        const mainInterface = Array.isArray(netInterfaces)
-            ? netInterfaces.find(i => !i.internal && i.ip4)
-            : null;
-
-        socket.emit('vm-info', {
-            instanceId: osInfo.hostname,
-            status: 'Online',
-            region: 'Local', // Region is cloud-specific; defaulting to Local
-            ip: mainInterface?.ip4 || '127.0.0.1',
-            os: `${osInfo.distro} ${osInfo.release}`,
-            kernel: osInfo.kernel
-        });
     } catch (error) {
         console.error("Error fetching static info:", error);
     }
