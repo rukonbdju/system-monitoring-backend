@@ -5,8 +5,8 @@ import cors from 'cors';
 import si from 'systeminformation';
 
 // --- Configuration ---
-const PORT = 3001;
-const UPDATE_INTERVAL_MS = 2000; // Increased to 2s as gathering real process data is heavier
+const PORT = process.env.PORT || 5000;
+const UPDATE_INTERVAL_MS = process.env.UPDATE_INTERVAL_MS || 2000;
 
 // --- App Setup ---
 const app = express();
@@ -123,7 +123,7 @@ setInterval(async () => {
         console.error("Error fetching stats:", error);
     }
 
-}, UPDATE_INTERVAL_MS);
+}, Number(UPDATE_INTERVAL_MS));
 
 // --- Start Server ---
 httpServer.listen(PORT, () => {
