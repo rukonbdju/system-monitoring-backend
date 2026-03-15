@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import si from 'systeminformation';
+import pm2 from 'pm2'
 
 // --- Configuration ---
 const PORT = process.env.PORT || 5000;
@@ -138,6 +139,30 @@ setInterval(async () => {
 
 }, Number(UPDATE_INTERVAL_MS));
 
+// Connect to the PM2 Local Daemon
+pm2.connect((err) => {
+    if (err) {
+        console.error(err);
+        process.exit(2);
+    }
+
+    // Send real-time updates every 2 seconds
+    setInterval(() => {
+        pm2.list((err, list) => {
+            if (!err) {
+                // Extract only necessary info (Name, CPU, Memory, Status)
+                const metrics = list.map(proc => ({
+                    name: proc.name,
+                    status: proc.pm2_env?.status,
+                    cpu: proc.monit?.cpu,
+                    memory: Math.round(proc.monit?.memory || 0 / 1024 / 1024) + 'MB',
+                    uptime: Math.round((Date.now() - (proc.pm2_env?.pm_uptime || Date.now())) / 1000) + 's'
+                }));
+                io.emit('pm2-metrics', metrics);
+            }
+        });
+    }, 1000);
+});
 // --- Start Server ---
 httpServer.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
