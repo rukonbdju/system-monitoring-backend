@@ -139,30 +139,70 @@ setInterval(async () => {
 
 }, Number(UPDATE_INTERVAL_MS));
 
-// Connect to the PM2 Local Daemon
 pm2.connect((err) => {
     if (err) {
-        console.error(err);
+        console.error("PM2 Connect Error:", err);
         process.exit(2);
     }
 
-    // Send real-time updates every 2 seconds
-    setInterval(() => {
-        pm2.list((err, list) => {
-            if (!err) {
-                // Extract only necessary info (Name, CPU, Memory, Status)
-                const metrics = list.map(proc => ({
-                    name: proc.name,
-                    status: proc.pm2_env?.status,
-                    cpu: proc.monit?.cpu,
-                    memory: Math.round(proc.monit?.memory || 0 / 1024 / 1024) + 'MB',
-                    uptime: Math.round((Date.now() - (proc.pm2_env?.pm_uptime || Date.now())) / 1000) + 's'
+    // ==========================================
+    // 1. WebSocket Implementation (Real-time)
+    // ==========================================
+    io.on('connection', (socket) => {
+        console.log(`New connection from: ${socket.handshake.address}`);
+
+        const sendPm2Data = () => {
+            pm2.list((err, list) => {
+                if (err) {
+                    console.error("PM2 List Error:", err);
+                    return;
+                }
+
+                const data = list.map(p => ({
+                    name: p.name,
+                    cpu: p.monit ? p.monit.cpu : 0,
+                    mem: p.monit ? Math.round(p.monit.memory || 0 / 1024 / 1024) : 0,
+                    status: p.pm2_env ? p.pm2_env.status : 'unknown',
+                    uptime: p.pm2_env && p.pm2_env.pm_uptime ? Math.round((Date.now() - p.pm2_env.pm_uptime) / 1000) + 's' : '0s'
                 }));
-                io.emit('pm2-metrics', metrics);
+                socket.emit('pm2-data', data);
+            });
+        };
+
+        // Send data immediately upon connection
+        sendPm2Data();
+
+        // Continue sending data every 2 seconds
+        const interval = setInterval(sendPm2Data, 2000);
+
+        socket.on('disconnect', () => clearInterval(interval));
+    });
+
+    // ==========================================
+    // 2. HTTP REST Endpoint Implementation (New)
+    // ==========================================
+    app.get('/api/processes', (req, res) => {
+        pm2.list((err, list) => {
+            if (err) {
+                console.error("Error fetching PM2 list:", err);
+                return res.status(500).json({ error: 'Failed to fetch PM2 process list' });
             }
+
+            // Map the data exactly like the socket payload for consistency
+            const data = list.map(p => ({
+                name: p.name,
+                cpu: p.monit ? p.monit.cpu : 0,
+                mem: p.monit ? Math.round(p?.monit?.memory || 0 / 1024 / 1024) : 0,
+                status: p.pm2_env ? p.pm2_env.status : 'unknown',
+                uptime: p.pm2_env && p.pm2_env.pm_uptime ? Math.round((Date.now() - p.pm2_env.pm_uptime) / 1000) + 's' : '0s'
+            }));
+
+            // Return the JSON response
+            res.json(data);
         });
-    }, 1000);
+    });
 });
+
 // --- Start Server ---
 httpServer.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
