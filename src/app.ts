@@ -161,7 +161,7 @@ pm2.connect((err) => {
                 const data = list.map(p => ({
                     name: p.name,
                     cpu: p.monit ? p.monit.cpu : 0,
-                    mem: p.monit ? Math.round(p.monit.memory || 0 / 1024 / 1024) : 0,
+                    mem: p.monit ? Math.round((p.monit.memory || 0) / 1024 / 1024) : 0,
                     status: p.pm2_env ? p.pm2_env.status : 'unknown',
                     uptime: p.pm2_env && p.pm2_env.pm_uptime ? Math.round((Date.now() - p.pm2_env.pm_uptime) / 1000) + 's' : '0s'
                 }));
