@@ -21,6 +21,11 @@ const io = new Server(httpServer, {
     }
 });
 
+//test
+app.get('/api/test', async (req, res) => {
+    res.send('System');
+})
+
 app.get('/api/vm-info', async (req, res) => {
     try {
         const [osInfo, netInterfaces] = await Promise.all([
